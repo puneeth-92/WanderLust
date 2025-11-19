@@ -1,18 +1,27 @@
+if(process.env.NODE_ENV !="production"){
+    require('dotenv').config();
+
+}
 const express=require("express");
 const app=express();
 const port=8080;
 const mongoose=require("mongoose");
-const Listing=require("./models/listing.js");
 const path=require("path");
 const methodOverride=require("method-override");
 const ejsMate = require("ejs-mate");
-const WrapAsync=require("./utils/wrapAsync.js");
 const ExpressError=require("./utils/ExpressError.js");
-const {listingSchema}=require("./schema.js");
+const session=require("express-session");
+const flash=require("connect-flash");
+const passport=require("passport");
+const localStrategy=require("passport-local");
+const User=require("./models/user.js");
+
+
+const listingRouter=require("./routes/listing.js");
+const reviewRouter=require("./routes/reviews.js");
+const userRouter=require("./routes/user.js");
+
 app.engine('ejs', ejsMate);
-
-
-
 app.use(express.static(path.join(__dirname,"public")));
 app.use(methodOverride('_method'));
 app.set("view engine","ejs");
@@ -30,82 +39,52 @@ async function main(){
     await mongoose.connect(mongo_url);
 }
 
-const validateListing=(req,res,next)=>{
-    let {error}=listingSchema.validate(req.body);
-    if(error){
-        console.log(error);
-        let errMsg=error.details.map((el)=>el.message).join(",");
-        throw new ExpressError(400,errMsg);
+const sessionOptions={
+    secret:"mysceretsessioncode",
+    resave:false,
+    saveUninitialized:true,
+    Cookie:{
+        expires:Date.now() + 7 * 24 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        httpOnly:true
     }
-}
+};
 
 app.get("/",(req,res)=>{
    res.send("in progress");
 });
 
-//view
-app.get("/listings",WrapAsync(async(req,res)=>{
-    const allListings=await Listing.find({});
-    res.render("listings/listings.ejs",{allListings});
-}));
+app.use(session(sessionOptions));
+app.use(flash());
 
-//New 
-app.get("/listings/new",(req,res)=>{
-    res.render("listings/new.ejs");
+app.use(passport.initialize());
+app.use(passport.session());
+passport.use(new localStrategy(User.authenticate()));
+
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
+
+app.use((req,res,next)=>{
+    res.locals.success=req.flash("success");
+    res.locals.error=req.flash("error");
+    res.locals.curUser=req.user;
+    next();
 });
 
-//Create
-app.post("/listings",validateListing,WrapAsync(async(req,res)=>{
-    const newListing=new Listing(req.body.listing);
-    await newListing.save();
-    res.redirect("/listings");
-}));
+app.use("/listings",listingRouter);
+app.use("/listings/:id/reviews",reviewRouter);
+app.use("/",userRouter);
 
-//show
-app.get("/listings/:id",WrapAsync(async(req,res)=>{
-    let {id}=req.params;
-    const listing=await Listing.findById(id);
-    res.render("listings/show.ejs",{listing});
-}));
-
-//Edit
-
-app.get("/listings/:id/edit",WrapAsync(async(req,res)=>{
-    let {id}=req.params;
-    let listing=await Listing.findById(id);
-    res.render("listings/edit.ejs",{listing});
-}));
-
-//upate
-
-app.put("/listings/:id",validateListing,WrapAsync(async(req,res)=>{
-    let {id}=req.params;
-    await Listing.findByIdAndUpdate(id, req.body.listing, { runValidators: true });
-    res.redirect(`/listings/${id}`);
-}));
-
-//delete
-app.delete("/listings/:id",WrapAsync(async(req,res)=>{
-    let {id}=req.params;
-    await Listing.findByIdAndDelete(id);
-    res.redirect("/listings");
-}));
-
-// app.get("/testlisting",(req,res)=>{
-//     let sampleListing =new Listing({
-//         title:"My New Villa",
-//         description:"By the Beach",
-//         price:1200,
-//         location:"Calangute,Goa",
-//         country:"India"
+// app.get("/demoUser",async(req,res)=>{
+//     let fakeUser=new User({
+//         email:"student@gmail.com",
+//         username:"delta-student",
 //     });
-//     // sampleListing.save();
-//     console.log("Saved Successfully");
-//     res.send("ok saved");
+//     let newUser=await User.register(fakeUser,"helloWorld");
+//     res.send(newUser);
 // });
 
-
-//After all routes are over
 //requesting for a page not found
 
 app.use((req,res,next)=>{
