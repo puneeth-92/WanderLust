@@ -43,7 +43,6 @@ main()
 
 const store=MongoStore.create({
     mongoUrl:dburl,
-    secret:process.env.SECRET,
     touchAfter:24 * 3600,
 });
 store.on("connected", () => console.log("MongoStore connected"));
