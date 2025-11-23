@@ -1,6 +1,5 @@
 if(process.env.NODE_ENV !="production"){
     require('dotenv').config();
-
 }
 const express=require("express");
 const app=express();
@@ -11,6 +10,7 @@ const methodOverride=require("method-override");
 const ejsMate = require("ejs-mate");
 const ExpressError=require("./utils/ExpressError.js");
 const session=require("express-session");
+const MongoStore = require('connect-mongo');
 const flash=require("connect-flash");
 const passport=require("passport");
 const localStrategy=require("passport-local");
@@ -29,30 +29,38 @@ app.set("views",path.join(__dirname,"views"));
 app.use(express.urlencoded({extended:true}));
 app.use(express.json());
 
-const mongo_url='mongodb://127.0.0.1:27017/WanderLust';
+// const mongo_url='mongodb://127.0.0.1:27017/WanderLust';
+
+const dburl=process.env.ATLASDB_URL;
+async function main(){
+    await mongoose.connect(dburl);
+}
 main()
 .then((res)=>{
-    console.log("DataBase connection is Scuccessfull");
+    console.log("DataBase connection is Successfull");
 }).catch((err)=>{console.log(err)});
 
-async function main(){
-    await mongoose.connect(mongo_url);
-}
 
+const store=MongoStore.create({
+    mongoUrl:dburl,
+    secret:process.env.SECRET,
+    touchAfter:24 * 3600,
+});
+store.on("connected", () => console.log("MongoStore connected"));
+store.on("error",()=>{
+    console.log("Errorn in session store");
+})
 const sessionOptions={
-    secret:"mysceretsessioncode",
+    store,
+    secret:process.env.SECRET,
     resave:false,
     saveUninitialized:true,
-    Cookie:{
-        expires:Date.now() + 7 * 24 * 60 * 60 * 1000,
+    cookie:{
+        expires:new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly:true
     }
 };
-
-app.get("/",(req,res)=>{
-   res.send("in progress");
-});
 
 app.use(session(sessionOptions));
 app.use(flash());
@@ -76,17 +84,8 @@ app.use("/listings",listingRouter);
 app.use("/listings/:id/reviews",reviewRouter);
 app.use("/",userRouter);
 
-// app.get("/demoUser",async(req,res)=>{
-//     let fakeUser=new User({
-//         email:"student@gmail.com",
-//         username:"delta-student",
-//     });
-//     let newUser=await User.register(fakeUser,"helloWorld");
-//     res.send(newUser);
-// });
 
 //requesting for a page not found
-
 app.use((req,res,next)=>{
     next(new ExpressError(404,"OOPS! Page Not Found!"));
 });

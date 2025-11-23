@@ -1,6 +1,6 @@
 const mongoose=require("mongoose");
 const Review = require("./reviews.js");
-const mongo_url='mongodb://127.0.0.1:27017/WanderLust';
+const dburl=process.env.ATLASDB_URL;
 const Schema=mongoose.Schema;
 
 main()
@@ -9,7 +9,7 @@ main()
 }).catch((err)=>{console.log(err)});
 
 async function main(){
-    await mongoose.connect(mongo_url);
+    await mongoose.connect(dburl);
 };
 
 const listingSchema=new Schema({
